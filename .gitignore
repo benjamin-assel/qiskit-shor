@@ -1,0 +1,7 @@
+# Files under the following directions will not be tracked by git.
+
+__pycache__/
+.pytest_cache/
+.venv/
+
+
