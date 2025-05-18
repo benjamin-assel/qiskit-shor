@@ -9,8 +9,8 @@ Packages versions are specified in [requirements.txt](https://github.com/benjami
 
 ## Disclaimer
 The work presented here is a complete implementation of Shor's algorithm, which, in theory, can run to factorize large integers and prove the quantum advantage of Shor's algorithm. This would be the case if the quantum hardware was available, namely if one had access to a quantum processor with enough qubits and low enough quantum noise. 
-As of 2025, the IBM quantum platform provides access to quantum processors, which allows to test the present code on a real quantum computer. However, the number of qubits available is limited with up to a few hundreds of qubits and, more importantly, the degree of quantum noise is still too high for applications such as Shor's factorization, even for small integers.
-Therefore, the code presented here is more of an exercise, in order to understand how Shor's algorithm works and how to implement it in Qiskit. It can be tested on noise-free similumators and it could be used in the future to test Shor's algorithm, as the hardware will improve.
+As of 2025, the IBM quantum platform provides access to quantum processors, which allows to test the present code on a real quantum computer. However, the number of qubits available is limited, with up to a few hundreds of qubits, and, more importantly, the degree of quantum noise is still too high for applications such as Shor's factorization, even for small integers.
+Therefore, the code presented here is more of an illustration of how Shor's algorithm works and how to implement it in Qiskit. It can be tested on noise-free similumators and it could be used in the future to test Shor's algorithm, as the hardware improves.
 
 
 ## Overview of Shor's algorithm
@@ -130,12 +130,6 @@ multi-qubit controlled operation. It can also be a single Qubit.
 The available operations, their input qubits requirements and input state assumptions are described in [adder.py] 
 (see method desxriptions).
 
-## Algorithm complexity
-
-This implementation is not optimal in terms of number of qubits required, nor in terms of number of elementary gates (single qubit or two-qubit gates). It is arguably the simplest implementation of the modular operations needed to create the order-finding quantum circuit, in the Fourier Transform paradigm.
-
-With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ and the depth is $O(n^3)$.
-
 ## Shor factorization
 The order finding circuit and Shor factorization algorithm are implemented in [shor.py].
 The main API functions are `find_order` and `find_factor`, which build the order 
@@ -164,12 +158,17 @@ These two variants are described in Beauregard's paper. They are toggled using t
 
 Some examples of the code usage on simulators and real devices can be found in the [example notebook].
 
+## Algorithm complexity
+
+This implementation is not optimal in terms of number of qubits required, nor in terms of number of elementary gates (single qubit or two-qubit gates). It is arguably the simplest implementation of the modular operations needed to create the order-finding quantum circuit, in the Fourier Transform paradigm.
+
+With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ and the depth is $O(n^3)$.
+
 ## Testing
 Unit tests can be run with `pytest`.
 ```
 python -m pytest <TEST_FILE>.py
 ```
-
 
 ## Resources
 
