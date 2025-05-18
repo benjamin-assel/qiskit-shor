@@ -1,3 +1,5 @@
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/release/python-3133/)
+
 # qiskit-shor
 Full implementation of Shor factoring algorithm with Qiskit SDK.
 
