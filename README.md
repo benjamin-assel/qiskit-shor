@@ -5,6 +5,13 @@ Full implementation of Shor factoring algorithm with Qiskit SDK.
 
 Packages versions are specified in [requirements.txt](https://github.com/benjamin-assel/qiskit-shor/blob/main/requirements.txt).
 
+Installation:
+- Open a terminal window 
+- Clone the repository on your local machine
+- Navigate to the cloned directory
+- [Optional] [Create and activate a virtual environment](https://docs.python.org/3/library/venv.html)
+- Run `pip install -r requirements.txt`
+
 [adder.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/adder.py
 [shor.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/shor.py
 [example notebook]: https://github.com/benjamin-assel/qiskit-shor/blob/main/example.ipynb
@@ -164,7 +171,7 @@ Some examples of the code usage on simulators and real devices can be found in t
 
 This implementation is not optimal in terms of number of qubits required, nor in terms of number of elementary gates (single qubit or two-qubit gates). It is arguably the simplest implementation of the modular operations needed to create the order-finding quantum circuit, in the Fourier Transform paradigm.
 
-With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ and the depth is $O(n^3)$.
+With $n := \lceil \, \log_2 N \, \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ and the depth is $O(n^3)$.
 
 ## Testing
 Unit tests can be run with `pytest`.
