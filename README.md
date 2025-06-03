@@ -1,20 +1,18 @@
-[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/release/python-3133/)
+
 
 # qiskit-shor
 Full implementation of Shor factoring algorithm with Qiskit SDK.
 
-Packages versions are specified in [requirements.txt](https://github.com/benjamin-assel/qiskit-shor/blob/main/requirements.txt).
+Python version: 3.13.2  
+Packages versions are specified in `requirements.txt`.
 
 Installation:
 - Open a terminal window 
 - Clone the repository on your local machine
 - Navigate to the cloned directory
-- [Optional] [Create and activate a virtual environment](https://docs.python.org/3/library/venv.html)
+- [Optional] Create and activate a virtual environment
 - Run `pip install -r requirements.txt`
 
-[adder.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/adder.py
-[shor.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/shor.py
-[example notebook]: https://github.com/benjamin-assel/qiskit-shor/blob/main/example.ipynb
 
 ## Disclaimer
 The work presented here is a complete implementation of Shor's algorithm, which, in theory, can run to factorize large integers and prove the quantum advantage of Shor's algorithm. This would be the case if the quantum hardware was available, namely if one had access to a quantum processor with enough qubits and low enough quantum noise. 
@@ -23,7 +21,7 @@ Therefore, the code presented here is more of an illustration of how Shor's algo
 
 
 ## Overview of Shor's algorithm
-Shor's algorithm is a quantum algorithm which allows to factorize a [composite integer](https://en.wikipedia.org/wiki/Composite_number) $N$, in polynomial 
+Shor's algorithm is a quantum algorithm which allows to factorize a composite integer $N$, in polynomial 
 time complexity in $n = \log N$, with high probability.
 The algorithm steps are:
 
@@ -42,10 +40,10 @@ This algorithm finds a factor of $N$ in polynomial time, with high probability.
 
 The order finding step 3 is a quantum search algorithm. It is probabilistic in nature, so one needs to repeat it until it succeeds. Its success rate depends on the 'precision' required, which gets reflected into the size of the quantum circuit.
 
-Introductions to Shor's algorithm are easy to find on the web (see e.g. on [Wikipedia](https://en.wikipedia.org/wiki/Shor%27s_algorithm)). 
+Introductions to Shor's algorithm are easy to find on the web (e.g. on Wikipedia). 
 
-[Original paper](https://arxiv.org/abs/quant-ph/9508027):
-Shor, P. W. (1999). *Polynomial-time algorithms for prime factorization and discrete logarithms on a quantum computer*. SIAM review, 41(2), 303-332.
+Original paper:
+Shor, P. W. (1999). *Polynomial-time algorithms for prime factorization and discrete logarithms on a quantum computer*. SIAM review, 41(2), 303-332. https://arxiv.org/abs/quant-ph/9508027
 
 ## Qubit conventions
 The implementation uses Qiskit conventions:
@@ -56,12 +54,12 @@ with $x_k \in \{0, 1\}$, where $x = \sum_{k=0}^{m-1} x_k 2^k$. In binary string 
 state $|x_k\rangle$. Often the quantum register in the state representing $x$ is called "x_reg".
 
 ## Modular arithmetics
-The modular arithmetic circuit operations are implemented in [adder.py], via the
+The modular arithmetic circuit operations are implemented in `adder.py`, via the
 `AdderCircuit` class methods.
 These operations are implemented in Fourier space, leveraging the rotation gates, 
 which are part of the basic set of gates in Qiskit, and the QFT gate to convert between
 computational and Fourier spaces.
-The implementation is based on the work of [Beauregard](https://arxiv.org/abs/quant-ph/0205095): *Circuit for Shor's algorithm using 2n+ 3 qubits*. arXiv preprint quant-ph/0205095. 
+The implementation is based on the work of Beauregard: *Circuit for Shor's algorithm using 2n+ 3 qubits*. https://arxiv.org/abs/quant-ph/0205095. 
 
 To create a circuit, use the `AdderCircuit` class, which is a subclass of `QuantumCircuit`.
 
@@ -136,11 +134,11 @@ qc.c_multiply_modulo(control_reg, 4, x_reg, z_reg[:4], z_reg[4], z_reg[5], N=9)
 The control register input can be a register of several qubits, to implement a 
 multi-qubit controlled operation. It can also be a single Qubit.
 
-The available operations, their input qubits requirements and input state assumptions are described in [adder.py] 
+The available operations, their input qubits requirements and input state assumptions are described in `adder.py` 
 (see method desxriptions).
 
 ## Shor factorization
-The order finding circuit and Shor factorization algorithm are implemented in [shor.py].
+The order finding circuit and Shor factorization algorithm are implemented in `shor.py`.
 The main API functions are `find_order` and `find_factor`, which build the order 
 finding circuit and run it on the provided quantum backend or simulator.
 ```python
@@ -165,7 +163,7 @@ The order finding circuit is implemented in two variants: the basic circuit usin
 at the end of the circuit, and the "one-control" circuit using $2n+3$ qubits and control flow operations on one qubit.
 These two variants are described in Beauregard's paper. They are toggled using the argument `one_control_circuit`.
 
-Some examples of the code usage on simulators and real devices can be found in the [example notebook].
+Some examples of the code usage on simulators and real devices can be found in the `example.ipynb` notebook.
 
 ## Algorithm complexity
 
@@ -181,6 +179,6 @@ python -m pytest <TEST_FILE>.py
 
 ## Resources
 
-[IBM Quantum Learning](https://learning.quantum.ibm.com/), [Shor factorization course](https://learning.quantum.ibm.com/course/fundamentals-of-quantum-algorithms/phase-estimation-and-factoring).
-
-[IBM Quantum Platform](https://quantum.ibm.com/)
+IBM Quantum Learning: https://learning.quantum.ibm.com,  
+Shor factorization course: https://learning.quantum.ibm.com/course/fundamentals-of-quantum-algorithms/phase-estimation-and-factoring  
+IBM Quantum Platform: https://quantum.ibm.com
