@@ -171,7 +171,7 @@ Some examples of the code usage on simulators and real devices can be found in t
 
 This implementation is not optimal in terms of number of qubits required, nor in terms of number of elementary gates (single qubit or two-qubit gates). It is arguably the simplest implementation of the modular operations needed to create the order-finding quantum circuit, in the Fourier Transform paradigm.
 
-With $n := \lceil \, \log_2 N \, \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ and the depth is $O(n^3)$.
+With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ and the depth is $O(n^3)$.
 
 ## Testing
 Unit tests can be run with `pytest`.
