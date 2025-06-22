@@ -101,6 +101,7 @@ class AdderCircuit(QuantumCircuit):
         Assumptions:
             - 0 <= X < N
             - 0 <= y < N
+            - y_reg has n+1 qubits, where n = ceil(log2(N))
             - The ancilla_bit qubit is in the |0> state.
         """
         y_bits = y_reg[:]
@@ -108,7 +109,7 @@ class AdderCircuit(QuantumCircuit):
         n = math.ceil(math.log2(N))
 
         assert 0 <= X and X < N, "X must be smaller than N."
-        assert n < len(y_bits), "The size of the target register is too small to hold modulo N additions."
+        assert len(y_bits) == n + 1, "The y register must have n+1 qubits."
 
         self.add_classical(X - N, y_bits)
         self.cx(y_bits[n], ancilla_bit)
@@ -139,7 +140,7 @@ class AdderCircuit(QuantumCircuit):
         k = len(control_bits)
 
         assert 0 <= X and X < N, "X must be smaller than N."
-        assert n < len(y_bits), "The y register should have at least one overflow bit."
+        assert len(y_bits) == n + 1, "The y register must have n+1 qubits."
 
         self.c_add_classical(control_bits, X, y_bits)
         self.add_classical(-N, y_bits)
@@ -235,6 +236,7 @@ class AdderCircuit(QuantumCircuit):
         Assumptions:
             - 0 <= x < N,
             - 0 <= y < N,
+            - y_reg has n+1 qubits, where n = ceil(log2(N))
             - the ancilla_bit qubit is in the |0> state.
         """
         x_bits = x_reg[:]
@@ -244,7 +246,7 @@ class AdderCircuit(QuantumCircuit):
         m = len(x_bits)
 
         assert m <= n, "x register may hold too large numbers."
-        assert n < len(y_bits), "The size of the y register is too small to hold modulo N addition."
+        assert len(y_bits) == n + 1, "The y register must have n+1 qubits."
 
         for i in range(m):
             self.c_add_classical_modulo(
@@ -275,7 +277,7 @@ class AdderCircuit(QuantumCircuit):
         m = len(x_bits)
 
         assert m <= n, "x register may hold too large numbers."
-        assert n < len(y_bits), "The size of the y register is too small to hold modulo N addition."
+        assert len(y_bits) == n + 1, "The y register must have n+1 qubits."
 
         for i in range(m):
             self.c_add_classical_modulo(
