@@ -114,7 +114,7 @@ def _get_order_from_dist(dist: dict, A: int, N: int, precision: int) -> int:
         if sorted_outputs[i] == "0" * precision:
             continue
         x = int(sorted_outputs[i], 2)
-        r = Fraction(x / 2**precision).limit_denominator(N).denominator
+        r = Fraction(x / 2**precision).limit_denominator(N - 1).denominator
         if pow(A, r, N) == 1:
             print(
                 f"""Found value {r} for the order of {A} in Z_{N}. If running on noisy quantum hardware, {r} might be a multiple of the order instead."""

@@ -19,7 +19,7 @@ Installation:
 ## Disclaimer
 The work presented here is a complete implementation of Shor's algorithm, which, in theory, can run to factorize large integers and prove the quantum advantage of Shor's algorithm. This would be the case if the quantum hardware was available, namely if one had access to a quantum processor with enough qubits and low enough quantum noise. 
 As of 2025, the IBM quantum platform provides access to quantum processors, which allows to test the present code on a real quantum computer. However, the number of qubits available is limited, with up to a few hundreds of qubits, and, more importantly, the degree of quantum noise is still too high for applications such as Shor's factorization, even for small integers.
-Therefore, the code presented here is more of an illustration of how Shor's algorithm works and how to implement it in Qiskit. It can be tested on noise-free similumators and it could be used in the future to test Shor's algorithm, as the hardware improves.
+Therefore, the code presented here is more of an illustration of how Shor's algorithm works and how to implement it in Qiskit. It can be tested on noise-free simulators and it could be used in the future to test Shor's algorithm, as the hardware improves.
 
 
 ## Overview of Shor's algorithm
