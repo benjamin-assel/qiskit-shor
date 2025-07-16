@@ -2,7 +2,9 @@ import math
 
 import numpy as np
 from qiskit.circuit import QuantumCircuit, QuantumRegister, Qubit
-from qiskit.circuit.library import CPhaseGate, CXGate, PhaseGate, QFTGate, SwapGate
+from qiskit.circuit.library import CPhaseGate, CXGate, PhaseGate, SwapGate
+
+from qiskit_shor.qft import QFTFullGate
 
 
 class AdderCircuit(QuantumCircuit):
@@ -17,6 +19,19 @@ class AdderCircuit(QuantumCircuit):
     in the qubit register as [qubit_0, qubit_1, ..., qubit_m], where qubit_k is in the state |x_k>.
     Often the quantum register in the state representing x is called "x_reg".
     """
+
+    # Whether to use approximate QFT gates in additions.
+    approx_QFT: bool
+
+    def __init__(self, *args, approx_QFT: bool = False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.approx_QFT = approx_QFT
+
+    def qft_approx_degree(self, n: int):
+        """The approximation degree to use in QFT gates (zero if no approximation is used).
+        It is defined to drop phase gates with angle smaller than π/2^d, with d = ceil(log2(n)) + 2.
+        See https://arxiv.org/pdf/quant-ph/0403071 for details."""
+        return max(0, n - math.ceil(np.log2(n)) - 2) if self.approx_QFT else 0
 
     @staticmethod
     def get_qubits(reg: QuantumRegister | list[Qubit] | Qubit) -> list[Qubit]:
@@ -38,21 +53,28 @@ class AdderCircuit(QuantumCircuit):
 
         The operation is performed modulo 2^n, where n is the size of the y register.
 
-        Gate counts: QFT gates -> O(n^2), other gates -> O(n).
+        Arguments:
+        - X: integer.
+        - y_reg: quantum register or list of qubits.
+        - include_QFT: whether to include the QFT gates in the circuit.
+
+        Gate counts: QFT gates -> O(n^2) (O(n log(n)) with approximation), other gates -> O(n).
         """
         y_bits = self.get_qubits(y_reg)
         n = len(y_bits)
 
         if include_QFT:
             # QFT
-            self.compose(QFTGate(n), y_bits, inplace=True)
+            qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
+            self.compose(qft_gate, y_bits, inplace=True)
         # Phase gates (= addition in Fourier space)
         for i in range(n):
             self.p(2 * np.pi * X * (2 ** (i - n)), y_bits[i])
 
         if include_QFT:
             # Inverse QFT
-            self.compose(QFTGate(n).inverse(), y_bits, inplace=True)
+            inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
+            self.compose(inv_qft_gate, y_bits, inplace=True)
 
     def c_add_classical(
         self,
@@ -71,7 +93,8 @@ class AdderCircuit(QuantumCircuit):
 
         if include_QFT:
             # QFT
-            self.compose(QFTGate(n), y_bits, inplace=True)
+            qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
+            self.compose(qft_gate, y_bits, inplace=True)
         # Controlled phase gates (= c_addition in Fourier space)
         for i in range(n):
             theta = 2 * np.pi * X * (2 ** (i - n))
@@ -80,7 +103,8 @@ class AdderCircuit(QuantumCircuit):
 
         if include_QFT:
             # Inverse QFT
-            self.compose(QFTGate(n).inverse(), y_bits, inplace=True)
+            inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
+            self.compose(inv_qft_gate, y_bits, inplace=True)
 
     def add_classical_modulo(
         self,
@@ -176,7 +200,8 @@ class AdderCircuit(QuantumCircuit):
 
         if include_QFT:
             # QFT
-            self.compose(QFTGate(n), y_bits, inplace=True)
+            qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
+            self.compose(qft_gate, y_bits, inplace=True)
         # Phase gates (= addition in Fourier space)
         for i in range(m):
             for j in range(n):
@@ -184,7 +209,8 @@ class AdderCircuit(QuantumCircuit):
                     self.cp(2 * np.pi * A * (2 ** (i + j - n)), x_bits[i], y_bits[j])
         if include_QFT:
             # Inverse QFT
-            self.compose(QFTGate(n).inverse(), y_bits, inplace=True)
+            inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
+            self.compose(inv_qft_gate, y_bits, inplace=True)
 
     def c_add_quantum(
         self,
@@ -206,7 +232,8 @@ class AdderCircuit(QuantumCircuit):
 
         if include_QFT:
             # QFT
-            self.compose(QFTGate(n), y_bits, inplace=True)
+            qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
+            self.compose(qft_gate, y_bits, inplace=True)
         # Phase gates (= addition in Fourier space)
         for i in range(m):
             for j in range(n):
@@ -216,7 +243,8 @@ class AdderCircuit(QuantumCircuit):
                     self.append(ccp_gate, control_bits + [x_bits[i], y_bits[j]])
         if include_QFT:
             # Inverse QFT
-            self.compose(QFTGate(n).inverse(), y_bits, inplace=True)
+            inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
+            self.compose(inv_qft_gate, y_bits, inplace=True)
 
     def add_quantum_modulo(
         self,

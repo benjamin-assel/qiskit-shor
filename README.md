@@ -13,8 +13,12 @@ Installation:
 - Run `pip install -r requirements.txt`
 
 [adder.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/adder.py
+[qft.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/qft.py
 [shor.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/shor.py
 [example notebook]: https://github.com/benjamin-assel/qiskit-shor/blob/main/example.ipynb
+[blog post]: https://towardsdatascience.com/where-are-we-with-shors-algorithm/
+
+A pedagogical walkthrough on the implementation of the algortihm is given this [blog post].
 
 ## Disclaimer
 The work presented here is a complete implementation of Shor's algorithm, which, in theory, can run to factorize large integers and prove the quantum advantage of Shor's algorithm. This would be the case if the quantum hardware was available, namely if one had access to a quantum processor with enough qubits and low enough quantum noise. 
@@ -60,7 +64,7 @@ The modular arithmetic circuit operations are implemented in [adder.py], via the
 `AdderCircuit` class methods.
 These operations are implemented in Fourier space, leveraging the rotation gates, 
 which are part of the basic set of gates in Qiskit, and the QFT gate to convert between
-computational and Fourier spaces.
+computational and Fourier spaces. We extend the QFTGate class in [qft.py] to allow for approximate QFT.
 The implementation is based on the work of [Beauregard](https://arxiv.org/abs/quant-ph/0205095): *Circuit for Shor's algorithm using 2n+ 3 qubits*. arXiv preprint quant-ph/0205095. 
 
 To create a circuit, use the `AdderCircuit` class, which is a subclass of `QuantumCircuit`.
@@ -139,6 +143,15 @@ multi-qubit controlled operation. It can also be a single Qubit.
 The available operations, their input qubits requirements and input state assumptions are described in [adder.py] 
 (see method desxriptions).
 
+An option to use approximate QFT gates is available, dropping phase gates with angle smaller than $\pi/2^d$, with $d = \lceil\log_2(n)\rceil + 2$, in all addition operations, where $n$ is the number of qubits in the target register.
+```python
+# Use approximate QFT gates
+q_reg = QuantumRegister(6)
+qc = AdderCircuit(q_reg, approx_QFT=True)
+```
+
+
+
 ## Shor factorization
 The order finding circuit and Shor factorization algorithm are implemented in [shor.py].
 The main API functions are `find_order` and `find_factor`, which build the order 
@@ -171,7 +184,7 @@ Some examples of the code usage on simulators and real devices can be found in t
 
 This implementation is not optimal in terms of number of qubits required, nor in terms of number of elementary gates (single qubit or two-qubit gates). It is arguably the simplest implementation of the modular operations needed to create the order-finding quantum circuit, in the Fourier Transform paradigm.
 
-With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ and the depth is $O(n^3)$.
+With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ (or $O(n^3\log n)$ with approximate QFT) and the depth is $O(n^3)$ (or $O(n^2\log n)$ with approximate QFT).
 
 ## Testing
 Unit tests can be run with `pytest`.

@@ -450,3 +450,13 @@ def test_exponentiate_modulo() -> None:
     dist = res.data.output.get_counts()
     print(dist)
     assert dist["00000" + "001" + "010100"] == 1
+
+
+def test_approximation_degree():
+    qc = AdderCircuit(4, approx_QFT=True)
+    assert qc.approx_QFT
+    assert qc.qft_approx_degree(n=2) == 0
+    assert qc.qft_approx_degree(n=5) == 0
+    assert qc.qft_approx_degree(n=6) == 1
+    assert qc.qft_approx_degree(n=7) == 2
+    assert qc.qft_approx_degree(n=15) == 9
