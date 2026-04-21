@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 from qiskit.circuit import QuantumCircuit, QuantumRegister, Qubit
-from qiskit.circuit.library import CPhaseGate, CXGate, PhaseGate, SwapGate
+from qiskit.circuit.library import SwapGate
 
 from qiskit_shor.qft import QFTFullGate
 
@@ -22,10 +22,13 @@ class AdderCircuit(QuantumCircuit):
 
     # Whether to use approximate QFT gates in additions.
     approx_QFT: bool
+    # Whether to use the depth optimized circuit from https://arxiv.org/pdf/quant-ph/0403071 in quantum additions.
+    optimized_depth: bool
 
-    def __init__(self, *args, approx_QFT: bool = False, **kwargs):
+    def __init__(self, *args, approx_QFT: bool = False, optimized_depth: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
         self.approx_QFT = approx_QFT
+        self.optimized_depth = optimized_depth
 
     def qft_approx_degree(self, n: int):
         """The approximation degree to use in QFT gates (zero if no approximation is used).
@@ -98,8 +101,7 @@ class AdderCircuit(QuantumCircuit):
         # Controlled phase gates (= c_addition in Fourier space)
         for i in range(n):
             theta = 2 * np.pi * X * (2 ** (i - n))
-            cp_gate = PhaseGate(theta).control(k)
-            self.append(cp_gate, control_bits + [y_bits[i]])
+            self.mcp(theta, control_bits, y_bits[i])
 
         if include_QFT:
             # Inverse QFT
@@ -173,8 +175,7 @@ class AdderCircuit(QuantumCircuit):
 
         if reset_ancilla:
             self.add_classical(-X, y_bits)
-            ccx_gate = CXGate().control(k)
-            self.append(ccx_gate, control_bits + [y_bits[n], ancilla_bit])
+            self.mcx(control_bits + [y_bits[n]], ancilla_bit)
             self.x(ancilla_bit)
             self.add_classical(X, y_bits)
 
@@ -184,6 +185,7 @@ class AdderCircuit(QuantumCircuit):
         y_reg: QuantumRegister | list[Qubit],
         A: int = 1,
         include_QFT: bool = True,
+        insert_barriers: bool = False,
     ) -> None:
         """
         Adds A times x to the quantum integer y, where A is a classical integer and x is a quantum integer.
@@ -202,11 +204,15 @@ class AdderCircuit(QuantumCircuit):
             # QFT
             qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
             self.compose(qft_gate, y_bits, inplace=True)
+        if insert_barriers:
+            self.barrier()
         # Phase gates (= addition in Fourier space)
         for i in range(m):
             for j in range(n):
                 if i + j < n:  # The phase rotation is trivial if i+j>=n.
                     self.cp(2 * np.pi * A * (2 ** (i + j - n)), x_bits[i], y_bits[j])
+        if insert_barriers:
+            self.barrier()
         if include_QFT:
             # Inverse QFT
             inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
@@ -228,23 +234,56 @@ class AdderCircuit(QuantumCircuit):
         y_bits = y_reg[:]
         m = len(x_bits)
         n = len(y_bits)
-        k = len(control_bits)
 
         if include_QFT:
             # QFT
             qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
             self.compose(qft_gate, y_bits, inplace=True)
-        # Phase gates (= addition in Fourier space)
-        for i in range(m):
-            for j in range(n):
-                if i + j < n:  # The phase rotation is trivial if i+j>=n.
-                    theta = 2 * np.pi * A * (2 ** (i + j - n))
-                    ccp_gate = CPhaseGate(theta).control(k)
-                    self.append(ccp_gate, control_bits + [x_bits[i], y_bits[j]])
+        if self.optimized_depth:
+            self._c_add_quantum_optimized_depth(control_reg, x_reg, y_reg, A)
+        else:
+            for i in range(m):
+                for j in range(n):
+                    if i + j < n:  # The phase rotation is trivial if i+j>=n.
+                        theta = 2 * np.pi * A * (2 ** (i + j - n))
+                        self.mcp(theta, control_bits + [x_bits[i]], y_bits[j])
         if include_QFT:
             # Inverse QFT
             inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
             self.compose(inv_qft_gate, y_bits, inplace=True)
+
+    def _c_add_quantum_optimized_depth(
+        self,
+        control_reg: QuantumRegister | list[Qubit] | Qubit,
+        x_reg: QuantumRegister | list[Qubit],
+        y_reg: QuantumRegister | list[Qubit],
+        A: int = 1,
+    ) -> None:
+        """
+        Controlled version of 'add_quantum', with modified circuit for depth
+        optimization, following https://arxiv.org/pdf/1207.0511.
+        """
+        control_bits = self.get_qubits(control_reg)
+        x_bits = x_reg[:]
+        y_bits = y_reg[:]
+        m = len(x_bits)
+        n = len(y_bits)
+
+        for i in range(m):
+            for j in range(n):
+                if i + j <= n:  # The phase rotation is trivial if i+j>n.
+                    self.cp(np.pi * A * (2 ** (i + j - n)), x_bits[i], y_bits[j])
+        for i in range(m):
+            self.mcx(control_bits, x_bits[i])
+        for i in range(m):
+            for j in range(n):
+                if i + j <= n:  # The phase rotation is trivial if i+j>n.
+                    self.cp(-np.pi * A * (2 ** (i + j - n)), x_bits[i], y_bits[j])
+        for i in range(m):
+            self.mcx(control_bits, x_bits[i])
+        for j in range(n):
+            phase = sum([np.pi * A * (2 ** (i + j - n)) for i in range(m)])
+            self.mcp(phase, control_bits, y_bits[j])
 
     def add_quantum_modulo(
         self,

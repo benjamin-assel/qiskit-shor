@@ -214,6 +214,30 @@ def test_c_add_quantum() -> None:
     dist = res.data.output.get_counts()
     assert dist["0100"] == 1
 
+    # Test optimized depth circuit
+    qc_od = AdderCircuit(c_reg, x_reg, y_reg, outpout_reg, optimized_depth=True)
+    qc_od.x(c_reg[0])
+    qc_od.add_classical(3, x_reg)
+    qc_od.add_classical(6, y_reg)
+    qc_od.c_add_quantum(c_reg, x_reg, y_reg, A=10)  # depth optimized operation
+    qc_od.measure(y_reg, outpout_reg)
+    res_od = run_simulation(qc_od)
+    dist_od = res_od.data.output.get_counts()
+    for k, v in dist_od.items():
+        assert v == dist[k]
+
+    qc_od = AdderCircuit(c_reg, x_reg, y_reg, outpout_reg, optimized_depth=True)
+    qc_od.x(c_reg[0])
+    qc_od.add_classical(2, x_reg)
+    qc_od.add_classical(3, y_reg)
+    qc_od.c_add_quantum(c_reg, x_reg, y_reg, A=5)  # depth optimized operation
+    qc_od.measure(y_reg, outpout_reg)
+
+    # Expected result = 5*2 + 3 = 13 mod 16 = "1101"
+    res_od = run_simulation(qc_od)
+    dist_od = res_od.data.output.get_counts()
+    assert dist_od["1101"] == 1
+
 
 def test_add_quantum_modulo() -> None:
     x_reg = QuantumRegister(3)

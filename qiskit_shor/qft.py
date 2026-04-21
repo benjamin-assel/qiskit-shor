@@ -1,5 +1,4 @@
 from qiskit.circuit.library import QFTGate
-from qiskit.synthesis import synth_qft_full
 
 
 class QFTFullGate(QFTGate):
@@ -30,6 +29,8 @@ class QFTFullGate(QFTGate):
 
     def _define(self):
         """Provide a specific decomposition of the QFTGate into a quantum circuit."""
+        from qiskit.synthesis.qft import synth_qft_full
+
         self.definition = synth_qft_full(
             num_qubits=self.num_qubits,
             do_swaps=self.do_swaps,
