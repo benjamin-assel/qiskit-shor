@@ -186,6 +186,12 @@ This implementation is not optimal in terms of number of qubits required, nor in
 
 With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ (or $O(n^3\log n)$ with approximate QFT) and the depth is $O(n^3)$ (or $O(n^2\log n)$ with approximate QFT).
 
+*Depth-optimized controlled quantum additions*: 
+A method `c_add_quantum_optmized_depth` is available to use controlled quantum addition operations with reduced circuit depth ($O(n)$ instead of $O(n^2)$), following [Pavlidis and Gizopoulos](https://arxiv.org/abs/1207.0511), but the it does not carry to modular controlled additions, so it is not used in the order finding circuit.
+
+[Pavlidis and Gizopoulos](https://arxiv.org/abs/1207.0511): *Fast Quantum Modular Exponentiation Architecture for Shor's Factorization Algorithm*. arXiv preprint arXiv:1207.0511. 
+
+
 ## Testing
 Unit tests can be run with `pytest`.
 ```
