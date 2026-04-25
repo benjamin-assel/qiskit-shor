@@ -89,7 +89,6 @@ class AdderCircuit(QuantumCircuit):
         control_bits = self.get_qubits(control_reg)
         y_bits = y_reg[:]
         n = len(y_bits)
-        k = len(control_bits)
 
         if include_QFT:
             # QFT
@@ -160,7 +159,6 @@ class AdderCircuit(QuantumCircuit):
         y_bits = y_reg[:]
         # Number of bits to hold modulo N results.
         n = math.ceil(math.log2(N))
-        k = len(control_bits)
 
         assert 0 <= X and X < N, "X must be smaller than N."
         assert len(y_bits) == n + 1, "The y register must have n+1 qubits."
