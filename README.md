@@ -184,13 +184,14 @@ Some examples of the code usage on simulators and real devices can be found in t
 
 This implementation is not optimal in terms of number of qubits required, nor in terms of number of elementary gates (single qubit or two-qubit gates). It is arguably the simplest implementation of the modular operations needed to create the order-finding quantum circuit, in the Fourier Transform paradigm.
 
-With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ (or $O(n^3\log n)$ with approximate QFT) and the depth is $O(n^3)$ (or $O(n^2\log n)$ with approximate QFT).
+With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ (or $O(n^3\log n)$ with approximate QFT) and the depth is $O(n^3)$ (or $O(n^2\log n)$ with approximate QFT).[^1]
 
 *Depth-optimized controlled quantum additions*: 
 A method `c_add_quantum_optmized_depth` is available to use controlled quantum addition operations with reduced circuit depth ($O(n)$ instead of $O(n^2)$), following [Pavlidis and Gizopoulos](https://arxiv.org/abs/1207.0511), but the it does not carry to modular controlled additions, so it is not used in the order finding circuit.
 
 [Pavlidis and Gizopoulos](https://arxiv.org/abs/1207.0511): *Fast Quantum Modular Exponentiation Architecture for Shor's Factorization Algorithm*. arXiv preprint arXiv:1207.0511. 
 
+[^1]: The complexity improvements brought by the approximate QFT assume a SWAP gate counts as a single gate, which is not true on devices with only neighbor qubit interactions. In practice SWAP gates require chains of 2-qubit interactions and, in this case, dominate the QFT gate complexity.
 
 ## Testing
 Unit tests can be run with `pytest`.
