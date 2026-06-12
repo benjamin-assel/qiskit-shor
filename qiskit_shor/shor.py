@@ -6,15 +6,21 @@ from qiskit.circuit import ClassicalRegister, QuantumRegister
 from qiskit.circuit.library import QFTGate
 
 from qiskit_shor.adder import AdderCircuit
+from qiskit_shor.qft_adder import QFTAdderCircuit
+from qiskit_shor.rc_adder import RCAdderCircuit
 
 
-def order_finding_circuit(A: int, N: int, precision: int | None = None) -> AdderCircuit:
+def order_finding_circuit(
+    A: int, N: int, precision: int | None = None, adder: str = "qft_adder"
+) -> AdderCircuit:
     """
     Build circuit to find the order of A in Z_N, using 4n+2 qubits, with n = ceil(log2(N)).
     Args:
         A: int.
         N: int.
         precision: Number of qubits to use for phase estimation. If None, use default value: 2n.
+        adder: Adder implementation to use. Currently supports "qft_adder" (uses QFTAdderCircuit)
+            and "rc_adder" (uses RCAdderCircuit). Default: "qft_adder".
     Returns:
         AdderCircuit: Order finding circuit.
     """
@@ -29,7 +35,16 @@ def order_finding_circuit(A: int, N: int, precision: int | None = None) -> Adder
     target_register = QuantumRegister(n)
     ancilla_register = QuantumRegister(n + 2)
     output_register = ClassicalRegister(m, name="output_bits")
-    qc = AdderCircuit(control_register, target_register, ancilla_register, output_register)
+    adder_ancilla_register = None
+    if adder == "qft_adder":
+        qc = QFTAdderCircuit(control_register, target_register, ancilla_register, output_register)
+    elif adder == "rc_adder":
+        adder_ancilla_register = QuantumRegister(n + 2)
+        qc = RCAdderCircuit(
+            control_register, target_register, ancilla_register, output_register, adder_ancilla_register
+        )
+    else:
+        raise ValueError(f"Adder {adder} not supported")
 
     # Prepare control state in "all quantum integers" superposition state
     for i in range(m):
@@ -40,7 +55,12 @@ def order_finding_circuit(A: int, N: int, precision: int | None = None) -> Adder
 
     # Apply modular exponential operator
     qc.exponentiate_modulo(
-        A=A, x_reg=control_register, y_reg=target_register, ancilla_reg=ancilla_register, N=N
+        A=A,
+        x_reg=control_register,
+        y_reg=target_register,
+        ancilla_reg=ancilla_register,
+        N=N,
+        a_reg=adder_ancilla_register,
     )
 
     # Apply inverse QFT
@@ -52,7 +72,9 @@ def order_finding_circuit(A: int, N: int, precision: int | None = None) -> Adder
     return qc
 
 
-def order_finding_circuit_one_control(A: int, N: int, precision: int | None = None) -> AdderCircuit:
+def order_finding_circuit_one_control(
+    A: int, N: int, precision: int | None = None, adder: str = "qft_adder"
+) -> AdderCircuit:
     """
     Build circuit to find the order of A in Z_N, using modular multiplication with a single control qubit
     and repeated measurements. The circuit uses 2n + 3 qubits in total, with n = ceil(log2(N)).
@@ -60,6 +82,8 @@ def order_finding_circuit_one_control(A: int, N: int, precision: int | None = No
         A: int.
         N: int.
         precision: int. Number of qubits to use for phase estimation. If None, use default value: 2n.
+        adder: Adder implementation to use. Currently supports "qft_adder" (uses QFTAdderCircuit)
+            and "rc_adder" (uses RCAdderCircuit). Default: "qft_adder".
     Returns:
         AdderCircuit: Order finding circuit.
     """
@@ -74,7 +98,20 @@ def order_finding_circuit_one_control(A: int, N: int, precision: int | None = No
     target_register = QuantumRegister(n)
     ancilla_register = QuantumRegister(n + 2)
     output_register = ClassicalRegister(m, name="output_bits")
-    qc = AdderCircuit(control_register, target_register, ancilla_register, output_register)
+    adder_ancilla_register = None
+    if adder == "qft_adder":
+        qc = QFTAdderCircuit(control_register, target_register, ancilla_register, output_register)
+    elif adder == "rc_adder":
+        adder_ancilla_register = QuantumRegister(n + 2)
+        qc = RCAdderCircuit(
+            control_register, target_register, ancilla_register, output_register, adder_ancilla_register
+        )
+    else:
+        raise ValueError(f"Adder {adder} not supported")
+
+    # Prepare control state in "all quantum integers" superposition state
+    for i in range(m):
+        qc.h(control_register[0])
 
     # Prepare target state in |1> state
     qc.x(target_register[0])
@@ -93,6 +130,7 @@ def order_finding_circuit_one_control(A: int, N: int, precision: int | None = No
             overflow_bit=ancilla_register[n],
             ancilla_bit=ancilla_register[n + 1],
             N=N,
+            a_reg=adder_ancilla_register,
         )
         # Inverse QFT i-th component.
         for j in range(i):
@@ -132,6 +170,7 @@ def find_order(
     precision: int | None = None,
     num_shots: int = 10,
     one_control_circuit: bool = False,
+    adder: str = "qft_adder",
 ) -> tuple[int, dict[str, int]]:
     """
     Carry out search algorithm for fnding the order of the integer A in Z_N, i.e. the
@@ -143,15 +182,17 @@ def find_order(
         precision: Number of qubits to use for phase estimation. If None, use default value: 2*ceil(log2(N)).
         num_shots: Number of circuit sampling runs. Default value: 10.
         one_control_circuit: boolean. Use order finding circuit with a single control qubit. Default value: False.
+        adder: Adder implementation to use. Currently supports "qft_adder" (uses QFTAdderCircuit)
+               and "rc_adder" (uses RCAdderCircuit). Default: "qft_adder".
     Returns:
         tuple[int, dict[str, int]]: The first element is the order (if found) or zero (if not). The second
                                     element is the distribution of the measurement outcomes.
     """
     m = precision if precision is not None else 2 * math.ceil(math.log2(N))
     if one_control_circuit:
-        qc = order_finding_circuit_one_control(A, N, precision=m)
+        qc = order_finding_circuit_one_control(A, N, precision=m, adder=adder)
     else:
-        qc = order_finding_circuit(A, N, precision=m)
+        qc = order_finding_circuit(A, N, precision=m, adder=adder)
     qc_isa = pass_manager.run(qc)
 
     print(f"Start search for the order of {A} in Z_{N}")
@@ -167,6 +208,7 @@ def find_factor(
     num_tries: int = 3,
     num_shots_per_trial: int = 10,
     one_control_circuit: bool = False,
+    adder: str = "qft_adder",
     seed: int | None = None,
 ) -> int:
     """
@@ -178,6 +220,8 @@ def find_factor(
         num_tries: Number of trials.
         num_shots_per_trial: Number of order finding circuit runs per trial.
         one_control_circuit: boolean. Use order finding circuit with a single control qubit. Default value: False.
+        adder: Adder implementation to use. Currently supports "qft_adder" (uses QFTAdderCircuit)
+            and "rc_adder" (uses RCAdderCircuit). Default: "qft_adder".
         seed: Random seed.
     Returns:
         int: Found factor or one if no success.
@@ -213,6 +257,7 @@ def find_factor(
             pass_manager,
             num_shots=num_shots_per_trial,
             one_control_circuit=one_control_circuit,
+            adder=adder,
         )
         if r == 0:
             continue

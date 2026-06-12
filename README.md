@@ -13,16 +13,20 @@ Installation:
 - Run `pip install -r requirements.txt`
 
 [adder.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/adder.py
-[qft.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/qft.py
+[qft_adder.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/qft_adder.py
+[rc_adder.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/rc_adder.py
 [shor.py]: https://github.com/benjamin-assel/qiskit-shor/tree/main/qiskit_shor/shor.py
 [example notebook]: https://github.com/benjamin-assel/qiskit-shor/blob/main/example.ipynb
 [blog post]: https://towardsdatascience.com/where-are-we-with-shors-algorithm/
 
 A pedagogical walkthrough on the implementation of the algortihm is given this [blog post].
 
+[Update: 2026-06] Refactor AdderCircuit class and implement Ripple-Carry quantum adder.
+
+
 ## Disclaimer
-The work presented here is a complete implementation of Shor's algorithm, which, in theory, can run to factorize large integers and prove the quantum advantage of Shor's algorithm. This would be the case if the quantum hardware was available, namely if one had access to a quantum processor with enough qubits and low enough quantum noise. 
-As of 2025, the IBM quantum platform provides access to quantum processors, which allows to test the present code on a real quantum computer. However, the number of qubits available is limited, with up to a few hundreds of qubits, and, more importantly, the degree of quantum noise is still too high for applications such as Shor's factorization, even for small integers.
+The work presented here is a complete implementation of Shor's algorithm, which, in theory, can factorize large integers and prove the quantum advantage of Shor's algorithm. This would be the case if the quantum hardware was available, namely if one had access to a quantum processor with enough qubits and low enough quantum noise. 
+As of 2025, the IBM quantum platform provides access to quantum processors, which allows to test the present code on a real quantum computer. However, the number of qubits available is limited, with up to a few hundreds of qubits, and the degree of quantum noise is still too high for applications such as Shor's factorization, even for small integers.
 Therefore, the code presented here is more of an illustration of how Shor's algorithm works and how to implement it in Qiskit. It can be tested on noise-free simulators and it could be used in the future to test Shor's algorithm, as the hardware improves.
 
 
@@ -51,6 +55,7 @@ Introductions to Shor's algorithm are easy to find on the web (see e.g. on [Wiki
 [Original paper](https://arxiv.org/abs/quant-ph/9508027):
 Shor, P. W. (1999). *Polynomial-time algorithms for prime factorization and discrete logarithms on a quantum computer*. SIAM review, 41(2), 303-332.
 
+
 ## Qubit conventions
 The implementation uses Qiskit conventions:
 * Classical integers are represented by capital letters, e.g. $X$, $Y$, $A$.
@@ -59,39 +64,49 @@ A quantum integer $x$ corresponds to a quantum state $|x\rangle := |x_0\rangle |
 with $x_k \in \{0, 1\}$, where $x = \sum_{k=0}^{m-1} x_k 2^k$. In binary string notation, it is the integer $x_m ... x_1 x_0$, so $x_0$ is the least significant bit (LSB), and it is ordered in the qubit register as [qubit_0, qubit_1, ..., qubit_m], where qubit_k is in the 
 state $|x_k\rangle$. Often the quantum register in the state representing $x$ is called "x_reg".
 
-## Modular arithmetics
-The modular arithmetic circuit operations are implemented in [adder.py], via the
-`AdderCircuit` class methods.
-These operations are implemented in Fourier space, leveraging the rotation gates, 
-which are part of the basic set of gates in Qiskit, and the QFT gate to convert between
-computational and Fourier spaces. We extend the QFTGate class in [qft.py] to allow for approximate QFT.
-The implementation is based on the work of [Beauregard](https://arxiv.org/abs/quant-ph/0205095): *Circuit for Shor's algorithm using 2n+ 3 qubits*. arXiv preprint quant-ph/0205095. 
 
-To create a circuit, use the `AdderCircuit` class, which is a subclass of `QuantumCircuit`.
+## Modular arithmetics
+The modular arithmetic operations are implemented in [adder.py], via the
+`AdderCircuit` class methods.
+For the elementary quantum additions we provide two independent implementations, in [qft_adder.py] and in [rc_adder.py], 
+following the two prominent approaches in the literature.
+
+### QFT approach
+The default implementation (in [qft_adder.py]) performs additions in Fourier space, leveraging the rotation gates, 
+which are part of the basic set of gates in Qiskit, and the "QFT gate" to convert between
+computational and Fourier space arithmetic representations.
+This QFT approach and the implementation of modular operations are based on the work of [Beauregard](https://arxiv.org/abs/quant-ph/0205095): *Circuit for Shor's algorithm using 2n+ 3 qubits*. arXiv preprint quant-ph/0205095. 
+
+To create a circuit, use the `QFTAdderCircuit` class, which is a subclass of `QuantumCircuit`.
 
 ```python
-from qiskit_shor.adder import AdderCircuit
+from qiskit.circuit import ClassicalRegister, QuantumRegister
+from qiskit_shor.qft_adder import QFTAdderCircuit
 
 # Create a circuit with 5 qubits
-qc1 = AdderCircuit(5)
+qc1 = QFTAdderCircuit(5)
 
 # Create a circuit with 3 qubits and 3 classical bits 
 q_reg = QuantumRegister(5)
 c_reg = ClassicalRegister(2)
-qc2 = AdderCircuit(q_reg, c_reg)
+qc2 = QFTAdderCircuit(q_reg, c_reg)
 ```
-To perform an operation, use the methods of the `AdderCircuit` class.
+To perform an operation, use the methods of the `QFTAdderCircuit` class.
 Since we are dealing with finite size quantum registers, all operations, even the non-modular ones, 
 are enforced modulo $2^k$, where $k$ is the size of the target quantum register, conventionally 
 named $y$ in this package. One typically ensures that the size of the target register is large enough 
 to contain the result of the operation.
 
 ```python
-x_reg = QuantumRegister(3)
+from qiskit.circuit import QuantumRegister
+from qiskit_shor.qft_adder import QFTAdderCircuit
+
+x_reg = QuantumRegister(4)
 y_reg = QuantumRegister(4)
 ancilla_reg = QuantumRegister(1)
+overflow_reg = QuantumRegister(1)
 
-qc = AdderCircuit(x_reg, y_reg, ancilla_reg)
+qc = QFTAdderCircuit(x_reg, y_reg, ancilla_reg, overflow_reg)
 # x -> x + 3
 qc.add_classical(3, x_reg)
 # y -> y + 6
@@ -100,15 +115,21 @@ qc.add_classical(6, y_reg)
 qc.add_quantum(x_reg, y_reg)
 # y -> y + 10*x
 qc.add_quantum(x_reg, y_reg, A=10)
-# x -> (x + 7) mod 9  
-qc.add_classical_modulo(7, x_reg, ancilla_reg[0], N=9)
+# x -> (x + 7) mod 9
+qc.add_classical_modulo(7, x_reg, ancilla_reg[0], overflow_reg[0], N=9)
 # y -> (y + 4*x) mod 9
-qc.add_quantum_modulo(x_reg, y_reg, ancilla_reg[0], N=9, A=4)
+qc.add_quantum_modulo(x_reg, y_reg, ancilla_reg[0], overflow_reg[0], N=9, A=4)
 
 z_reg = QuantumRegister(6)
+qc = QFTAdderCircuit(x_reg, y_reg, z_reg)
 # x -> 4*x mod 9
 qc.multiply_modulo(
-    A=4, x_reg=x_reg, y_reg=z_reg[:4], overflow_bit=z_reg[4], ancilla_bit=z_reg[5], N=9,
+    A=4,
+    x_reg=x_reg,
+    y_reg=z_reg[:4],
+    overflow_bit=z_reg[4],
+    ancilla_bit=z_reg[5],
+    N=9,
 )
 # (x, y) -> (x, y*(4^x) mod 9)
 qc.exponentiate_modulo(A=4, x_reg=x_reg, y_reg=y_reg, ancilla_reg=z_reg, N=9)
@@ -117,43 +138,76 @@ qc.exponentiate_modulo(A=4, x_reg=x_reg, y_reg=y_reg, ancilla_reg=z_reg, N=9)
 Controlled operations are also supported.
 ```python
 control_reg = QuantumRegister(1)
-x_reg = QuantumRegister(3)
+x_reg = QuantumRegister(4)
 y_reg = QuantumRegister(4)
 ancilla_reg = QuantumRegister(1)
+overflow_reg = QuantumRegister(1)
 
-qc = AdderCircuit(control_reg, x_reg, y_reg, ancilla_reg)
+qc = QFTAdderCircuit(control_reg, x_reg, y_reg, ancilla_reg, overflow_reg)
 # Flip control bit
 qc.x(control_reg[0])
 # Controlled operation x -> x + 3
 qc.c_add_classical(control_reg, 3, x_reg)
 # Controlled operation x -> (x + 6) mod 9
-qc.c_add_classical_modulo(control_reg, 6, x_reg, ancilla_reg[0],N=9)
+qc.c_add_classical_modulo(control_reg, 6, x_reg, ancilla_reg[0], overflow_reg[0], N=9)
 # Controlled operation y -> y + x
-qc.c_add_quantum(control_reg, x_reg, y_reg, ancilla_reg[0])
+qc.c_add_quantum(control_reg, x_reg, y_reg)
 # Controlled operation y -> (y + 10*x) mod 9
-qc.c_add_quantum_modulo(control_reg, x_reg, y_reg, ancilla_reg[0], N=9, A=10)
+qc.c_add_quantum_modulo(control_reg, x_reg, y_reg, ancilla_reg[0], overflow_reg[0], N=9, A=10)
 
 z_reg = QuantumRegister(6)
+qc = QFTAdderCircuit(control_reg, x_reg, z_reg)
 # Controlled operation x -> 4*x mod 9
 qc.c_multiply_modulo(control_reg, 4, x_reg, z_reg[:4], z_reg[4], z_reg[5], N=9)
 ```
 The control register input can be a register of several qubits, to implement a 
 multi-qubit controlled operation. It can also be a single Qubit.
 
-The available operations, their input qubits requirements and input state assumptions are described in [adder.py] 
-(see method desxriptions).
+The available operations, their input qubits requirements and input state assumptions are described in [adder.py] and [qft_adder.py] 
+(see method descriptions).
 
 An option to use approximate QFT gates is available, dropping phase gates with angle smaller than $\pi/2^d$, with $d = \lceil\log_2(n)\rceil + 2$, in all addition operations, where $n$ is the number of qubits in the target register.
 ```python
 # Use approximate QFT gates
 q_reg = QuantumRegister(6)
-qc = AdderCircuit(q_reg, approx_QFT=True)
+qc = QFTAdderCircuit(q_reg, approx_QFT=True)
 ```
 
+### Ripple-Carry approach
+The second implementation of quantum additions (in [rc_adder.py]) uses the Ripple-Carry algorithm of [Cucarro et al](https://arxiv.org/abs/quant-ph/0410184): *A new quantum ripple-carry addition circuit. arXiv preprint quant-ph/0410184*. 
+It uses fewer gates (asymptotically) than the QFT approach, but it requires extra ancilla qubits (see section [Algorithm complexity](#algorithm-complexity)). Importantly, all operations use only X, CX and CCX gates (i.e. NOT, CNOT and Toffoli gates), which makes this approach more suitable for quantum error correction attempts.
+The precise operations and the qubit requirements are given in the method descriptions in [rc_adder.py].
+
+Creating quantum adder circuits and performing operations is similar to the QFT approach, except that we need the additional ancilla qubits, conventionally given in a QuantumRegister `a_reg` in the code. While adding two quantum numbers requires only one extra ancilla qubit, adding a classical integer to a quantum integer requires n+1 ancilla qubits, where n qubits are used to encode the classical integer into a quantum integer. The operations return the ancilla qubits in their initial |0> state.
+
+```python
+from qiskit.circuit import QuantumRegister
+from qiskit_shor.rc_adder import RCAdderCircuit
+
+x_reg = QuantumRegister(4)
+y_reg = QuantumRegister(4)
+a_reg = QuantumRegister(6)
+ancilla_reg = QuantumRegister(1)
+overflow_reg = QuantumRegister(1)
+
+qc = RCAdderCircuit(x_reg, y_reg, a_reg, ancilla_reg, overflow_reg)
+# x -> x + 3
+qc.add_classical(3, x_reg, a_reg)
+# y -> y + 6
+qc.add_classical(6, y_reg, a_reg)
+# y -> y + x
+qc.add_quantum(x_reg, y_reg, a_reg[0])
+# x -> (x + 7) mod 9
+qc.add_classical_modulo(7, x_reg, ancilla_reg[0], overflow_reg[0], N=9, a_reg=a_reg)
+# y -> (y + 4*x) mod 9
+qc.add_quantum_modulo(x_reg, y_reg, ancilla_reg[0], overflow_reg[0], N=9, A=4, a_reg=a_reg)
+```
+As for the QFT approach, controlled operations are also supported.
 
 
 ## Shor factorization
-The order finding circuit and Shor factorization algorithm are implemented in [shor.py].
+The order finding circuit and Shor factorization algorithm are implemented in [shor.py], leveraging the modular arithmetic operations discussed above, using the QFT approach by default.
+
 The main API functions are `find_order` and `find_factor`, which build the order 
 finding circuit and run it on the provided quantum backend or simulator.
 ```python
@@ -167,37 +221,53 @@ N = 15
 A = 7
 # Compute the order of A in Z_N, running the circuit 100 times. Return the order and the distribution of measurement outcomes.
 order, distribution = find_order(
-    A, N, sampler, pass_manager, num_shots=100, one_control_circuit=True,
+    A, N, sampler, pass_manager, num_shots=100, adder="qft_adder", one_control_circuit=True,
 )
 # Compute a factor of N using Shor algortihm, trying 3 random values for A and running the circuit 100 times for each try.
 factor = find_factor(
-    N, sampler, pass_manager, num_tries=3, num_shots_per_trial=100, one_control_circuit=True,
+    N, sampler, pass_manager, num_tries=3, num_shots_per_trial=100, adder="qft_adder", one_control_circuit=True,
 )
 ```
 The order finding circuit is implemented in two variants: the basic circuit using $4n+2$ qubits with measurements 
 at the end of the circuit, and the "one-control" circuit using $2n+3$ qubits and control flow operations on one qubit.
 These two variants are described in Beauregard's paper. They are toggled using the argument `one_control_circuit`.
 
+The Ripple-Carry approach to modular operations is also supported, via the argument `adder="rc_adder"`. 
+E.g.
+```python
+order, distribution = find_order(
+    A, N, sampler, pass_manager, num_shots=100, adder="rc_adder", one_control_circuit=True,
+)
+```
+
 Some examples of the code usage on simulators and real devices can be found in the [example notebook].
 
+
 ## Algorithm complexity
+The implementation chosen in this repository is not meant to include state-of-the-art optimizations and one may find more efficient implementations in terms of number of qubits required or number of gates, in the literature. But it is arguably the simplest and easiest to understand implementation of the modular operations needed to create the order-finding quantum circuit, in the Fourier Transform paradigm or Ripple-Carry paradigm.
 
-This implementation is not optimal in terms of number of qubits required, nor in terms of number of elementary gates (single qubit or two-qubit gates). It is arguably the simplest implementation of the modular operations needed to create the order-finding quantum circuit, in the Fourier Transform paradigm.
+**Fourier Transform approach**:
 
-With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ (or $O(n^3\log n)$ with approximate QFT) and the depth is $O(n^3)$ (or $O(n^2\log n)$ with approximate QFT).[^1]
+With $n := \lceil \log_2 N \rceil$, the basic order finding circuit requires $4n+2$ qubits, while the circuit using a single control qubit requires $2n+3$ qubits in total. The number of gates is $O(n^4)$ (or $O(n^3\log n)$ with approximate QFT) and the depth is $O(n^3)$ (or $O(n^2\log n)$ with approximate QFT).
 
 *Depth-optimized controlled quantum additions*: 
 A method `c_add_quantum_optmized_depth` is available to use controlled quantum addition operations with reduced circuit depth ($O(n)$ instead of $O(n^2)$), following [Pavlidis and Gizopoulos](https://arxiv.org/abs/1207.0511), but the it does not carry to modular controlled additions, so it is not used in the order finding circuit.
 
 [Pavlidis and Gizopoulos](https://arxiv.org/abs/1207.0511): *Fast Quantum Modular Exponentiation Architecture for Shor's Factorization Algorithm*. arXiv preprint arXiv:1207.0511. 
 
-[^1]: The complexity improvements brought by the approximate QFT assume a SWAP gate counts as a single gate, which is not true on devices with only neighbor qubit interactions. In practice SWAP gates require chains of 2-qubit interactions and, in this case, dominate the QFT gate complexity.
+**Ripple-Carry approach**:
+
+The Ripple-Carry approach requires $5n+4$ qubits, or $3n+5$ qubits with the one-control circuit, the number of gates is $O(n^3)$ and the depth is $O(n^3)$.
+
+*Note: This kind of gate and depth counting is somewhat ambiguous (which is why we don't give precise numbers). For gates we count single-qubit and two-qubit gates of the Qiskit API and for the depth we consider the depth of the non-transpiled circuit. This would be practically relevant if all physical qubits were pairwise-connected in the underlying QPU (i.e. physical two-qubit gates exist for all pairs of qubits). In pratice physical qubits are only sparsely connected and chains of two-qubit gates are required to implement two-qubit gates between distant qubits. The actual number of gates and depth of the circuits depend on the underlying QPU.*
+
 
 ## Testing
 Unit tests can be run with `pytest`.
 ```
 python -m pytest <TEST_FILE>.py
 ```
+
 
 ## Resources
 

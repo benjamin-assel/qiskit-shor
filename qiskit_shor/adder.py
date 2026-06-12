@@ -1,15 +1,13 @@
 import math
+from abc import ABC, abstractmethod
 
-import numpy as np
 from qiskit.circuit import QuantumCircuit, QuantumRegister, Qubit
 from qiskit.circuit.library import SwapGate
 
-from qiskit_shor.qft import QFTFullGate
 
-
-class AdderCircuit(QuantumCircuit):
+class AdderCircuit(ABC, QuantumCircuit):
     """
-    Quantum circuit implementing modular arithmetics used in the order finding circuit of Shor algorithm.
+    Quantum circuit implementing modular arithmetics used in the order-finding circuit of Shor's algorithm.
     Based on https://arxiv.org/abs/quant-ph/0205095 by Beauregard.
 
     Conventions:
@@ -20,19 +18,6 @@ class AdderCircuit(QuantumCircuit):
     Often the quantum register in the state representing x is called "x_reg".
     """
 
-    # Whether to use approximate QFT gates in additions.
-    approx_QFT: bool
-
-    def __init__(self, *args, approx_QFT: bool = False, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.approx_QFT = approx_QFT
-
-    def qft_approx_degree(self, n: int):
-        """The approximation degree to use in QFT gates (zero if no approximation is used).
-        It is defined to drop phase gates with angle smaller than π/2^d, with d = ceil(log2(n)) + 2.
-        See https://arxiv.org/pdf/quant-ph/0403071 for details."""
-        return max(0, n - math.ceil(np.log2(n)) - 2) if self.approx_QFT else 0
-
     @staticmethod
     def get_qubits(reg: QuantumRegister | list[Qubit] | Qubit) -> list[Qubit]:
         """Returns the provided qubits input as a list of qubits."""
@@ -40,80 +25,55 @@ class AdderCircuit(QuantumCircuit):
             return [reg]
         return reg[:]
 
+    @abstractmethod
     def add_classical(
         self,
         X: int,
         y_reg: QuantumRegister | list[Qubit],
-        include_QFT: bool = True,
+        a_reg: QuantumRegister | list[Qubit] | None = None,
     ) -> None:
         """
-        Adds the classical integer X to the quantum integer y.
+        Adds the classical integer X to the quantum integer y, using optional ancilla qubits.
 
         Operation: |y> -> |X + y >
 
         The operation is performed modulo 2^n, where n is the size of the y register.
+        The ancilla qubits are reset to zero after the operation.
 
         Arguments:
         - X: integer.
         - y_reg: quantum register or list of qubits.
-        - include_QFT: whether to include the QFT gates in the circuit.
-
-        Gate counts: QFT gates -> O(n^2) (O(n log(n)) with approximation), other gates -> O(n).
+        - a_reg: [Optional] quantum register or list of ancilla qubits.
         """
-        y_bits = self.get_qubits(y_reg)
-        n = len(y_bits)
+        pass
 
-        if include_QFT:
-            # QFT
-            qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
-            self.compose(qft_gate, y_bits, inplace=True)
-        # Phase gates (= addition in Fourier space)
-        for i in range(n):
-            self.p(2 * np.pi * X * (2 ** (i - n)), y_bits[i])
-
-        if include_QFT:
-            # Inverse QFT
-            inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
-            self.compose(inv_qft_gate, y_bits, inplace=True)
-
+    @abstractmethod
     def c_add_classical(
         self,
         control_reg: QuantumRegister | list[Qubit] | Qubit,
         X: int,
         y_reg: QuantumRegister | list[Qubit],
-        include_QFT: bool = True,
+        a_reg: QuantumRegister | list[Qubit] | None = None,
     ) -> None:
         """
         Controlled version of 'add_classical'.
         """
-        control_bits = self.get_qubits(control_reg)
-        y_bits = y_reg[:]
-        n = len(y_bits)
-
-        if include_QFT:
-            # QFT
-            qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
-            self.compose(qft_gate, y_bits, inplace=True)
-        # Controlled phase gates (= c_addition in Fourier space)
-        for i in range(n):
-            theta = 2 * np.pi * X * (2 ** (i - n))
-            self.mcp(theta, control_bits, y_bits[i])
-
-        if include_QFT:
-            # Inverse QFT
-            inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
-            self.compose(inv_qft_gate, y_bits, inplace=True)
+        pass
 
     def add_classical_modulo(
         self,
         X: int,
         y_reg: QuantumRegister | list[Qubit],
         ancilla_bit: Qubit,
+        overflow_bit: Qubit,
         N: int,
+        a_reg: QuantumRegister | list[Qubit] | None = None,
         reset_ancilla: bool = True,
     ) -> None:
         """
-        Adds the classical integer X to the integer y modulo N, using one ancilla qubit.
+        Adds the classical integer X to the integer y modulo N, using
+        one overflow qubit and one ancilla qubit.
+        An optional ancilla register is used to perform additions.
 
         Operation:
             |y>|0> -> |r>|0>  if reset_ancilla = True
@@ -123,25 +83,26 @@ class AdderCircuit(QuantumCircuit):
         Assumptions:
             - 0 <= X < N
             - 0 <= y < N
-            - y_reg has n+1 qubits, where n = ceil(log2(N))
-            - The ancilla_bit qubit is in the |0> state.
+            - y_reg has n qubits, where n = ceil(log2(N))
+            - The ancilla_bit and overflow qubits are in the |0> state.
+            - The optional ancilla register a_reg is in the |0> state (it is reset to |0> after the operation).
         """
-        y_bits = y_reg[:]
+        y_bits = y_reg[:] + [overflow_bit]
         # Number of bits to hold modulo N results.
         n = math.ceil(math.log2(N))
 
         assert 0 <= X and X < N, "X must be smaller than N."
-        assert len(y_bits) == n + 1, "The y register must have n+1 qubits."
+        assert len(y_bits) == n + 1, f"The y register must have {n} qubits."
 
-        self.add_classical(X - N, y_bits)
+        self.add_classical(X - N, y_bits, a_reg)
         self.cx(y_bits[n], ancilla_bit)
-        self.c_add_classical(ancilla_bit, N, y_bits)
+        self.c_add_classical(ancilla_bit, N, y_bits, a_reg)
 
         if reset_ancilla:
-            self.add_classical(-X, y_bits)
+            self.add_classical(-X, y_bits, a_reg)
             self.cx(y_bits[n], ancilla_bit)
             self.x(ancilla_bit)
-            self.add_classical(X, y_bits)
+            self.add_classical(X, y_bits, a_reg)
 
     def c_add_classical_modulo(
         self,
@@ -149,154 +110,47 @@ class AdderCircuit(QuantumCircuit):
         X: int,
         y_reg: QuantumRegister | list[Qubit],
         ancilla_bit: Qubit,
+        overflow_bit: Qubit,
         N: int,
+        a_reg: QuantumRegister | list[Qubit] | None = None,
         reset_ancilla: bool = True,
     ) -> None:
         """
         Controlled version of 'add_classical_modulo'.
         """
         control_bits = self.get_qubits(control_reg)
-        y_bits = y_reg[:]
+        y_bits = y_reg[:] + [overflow_bit]
         # Number of bits to hold modulo N results.
         n = math.ceil(math.log2(N))
 
         assert 0 <= X and X < N, "X must be smaller than N."
-        assert len(y_bits) == n + 1, "The y register must have n+1 qubits."
+        assert len(y_bits) == n + 1, f"The y register must have {n} qubits."
 
-        self.c_add_classical(control_bits, X, y_bits)
-        self.add_classical(-N, y_bits)
+        self.c_add_classical(control_bits, X, y_bits, a_reg)
+        self.add_classical(-N, y_bits, a_reg)
         self.cx(y_bits[n], ancilla_bit)
-        self.c_add_classical(ancilla_bit, N, y_bits)
+        self.c_add_classical(ancilla_bit, N, y_bits, a_reg)
 
         if reset_ancilla:
-            self.add_classical(-X, y_bits)
+            self.add_classical(-X, y_bits, a_reg)
             self.mcx(control_bits + [y_bits[n]], ancilla_bit)
             self.x(ancilla_bit)
-            self.add_classical(X, y_bits)
-
-    def add_quantum(
-        self,
-        x_reg: QuantumRegister | list[Qubit],
-        y_reg: QuantumRegister | list[Qubit],
-        A: int = 1,
-        include_QFT: bool = True,
-        insert_barriers: bool = False,
-    ) -> None:
-        """
-        Adds A times x to the quantum integer y, where A is a classical integer and x is a quantum integer.
-
-        Operation:
-            |x>|y> -> |x>|y + Ax>
-
-        The operation is performed modulo 2^n, where n is the size of the y register.
-        """
-        x_bits = x_reg[:]
-        y_bits = y_reg[:]
-        m = len(x_bits)
-        n = len(y_bits)
-
-        if include_QFT:
-            # QFT
-            qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
-            self.compose(qft_gate, y_bits, inplace=True)
-        if insert_barriers:
-            self.barrier()
-        # Phase gates (= addition in Fourier space)
-        for i in range(m):
-            for j in range(n):
-                if i + j < n:  # The phase rotation is trivial if i+j>=n.
-                    self.cp(2 * np.pi * A * (2 ** (i + j - n)), x_bits[i], y_bits[j])
-        if insert_barriers:
-            self.barrier()
-        if include_QFT:
-            # Inverse QFT
-            inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
-            self.compose(inv_qft_gate, y_bits, inplace=True)
-
-    def c_add_quantum(
-        self,
-        control_reg: QuantumRegister | list[Qubit] | Qubit,
-        x_reg: QuantumRegister | list[Qubit],
-        y_reg: QuantumRegister | list[Qubit],
-        A: int = 1,
-        include_QFT: bool = True,
-    ) -> None:
-        """
-        Controlled version of 'add_quantum'.
-        """
-        control_bits = self.get_qubits(control_reg)
-        x_bits = x_reg[:]
-        y_bits = y_reg[:]
-        m = len(x_bits)
-        n = len(y_bits)
-
-        if include_QFT:
-            # QFT
-            qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
-            self.compose(qft_gate, y_bits, inplace=True)
-        for i in range(m):
-            for j in range(n):
-                if i + j < n:  # The phase rotation is trivial if i+j>=n.
-                    theta = 2 * np.pi * A * (2 ** (i + j - n))
-                    self.mcp(theta, control_bits + [x_bits[i]], y_bits[j])
-        if include_QFT:
-            # Inverse QFT
-            inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
-            self.compose(inv_qft_gate, y_bits, inplace=True)
-
-    def c_add_quantum_optimized_depth(
-        self,
-        control_reg: QuantumRegister | list[Qubit] | Qubit,
-        x_reg: QuantumRegister | list[Qubit],
-        y_reg: QuantumRegister | list[Qubit],
-        A: int = 1,
-        include_QFT: bool = True,
-    ) -> None:
-        """
-        Controlled version of 'add_quantum', with modified circuit for depth
-        optimization, following https://arxiv.org/pdf/1207.0511.
-        """
-        control_bits = self.get_qubits(control_reg)
-        x_bits = x_reg[:]
-        y_bits = y_reg[:]
-        m = len(x_bits)
-        n = len(y_bits)
-
-        if include_QFT:
-            # QFT
-            qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n))
-            self.compose(qft_gate, y_bits, inplace=True)
-        for i in range(m):
-            for j in range(n):
-                if i + j <= n:  # The phase rotation is trivial if i+j>n.
-                    self.cp(np.pi * A * (2 ** (i + j - n)), x_bits[i], y_bits[j])
-        for i in range(m):
-            self.mcx(control_bits, x_bits[i])
-        for i in range(m):
-            for j in range(n):
-                if i + j <= n:  # The phase rotation is trivial if i+j>n.
-                    self.cp(-np.pi * A * (2 ** (i + j - n)), x_bits[i], y_bits[j])
-        for i in range(m):
-            self.mcx(control_bits, x_bits[i])
-        for j in range(n):
-            phase = sum([np.pi * A * (2 ** (i + j - n)) for i in range(m)])
-            self.mcp(phase, control_bits, y_bits[j])
-        if include_QFT:
-            # Inverse QFT
-            inv_qft_gate = QFTFullGate(n, approximation_degree=self.qft_approx_degree(n)).inverse()
-            self.compose(inv_qft_gate, y_bits, inplace=True)
+            self.add_classical(X, y_bits, a_reg)
 
     def add_quantum_modulo(
         self,
         x_reg: QuantumRegister | list[Qubit],
         y_reg: QuantumRegister | list[Qubit],
         ancilla_bit: Qubit,
+        overflow_bit: Qubit,
         N: int,
+        a_reg: QuantumRegister | list[Qubit] | None = None,
         A: int = 1,
     ) -> None:
         """
         Adds A times x to the quantum integer y modulo N, where A is a classical integer
         and x is a quantum integer, using one ancilla qubit.
+        An optional ancilla register is used to perform additions.
 
         Operation:
             |x>|y>|0> -> |x>|(y + Ax) mod N >|0>
@@ -314,15 +168,17 @@ class AdderCircuit(QuantumCircuit):
         m = len(x_bits)
 
         assert m <= n, "x register may hold too large numbers."
-        assert len(y_bits) == n + 1, "The y register must have n+1 qubits."
+        assert len(y_bits) == n, f"The y register must have {n} qubits."
 
         for i in range(m):
             self.c_add_classical_modulo(
                 control_reg=x_bits[i],
-                N=N,
                 X=((A % N) * 2**i) % N,
                 y_reg=y_bits,
                 ancilla_bit=ancilla_bit,
+                overflow_bit=overflow_bit,
+                N=N,
+                a_reg=a_reg,
             )
 
     def c_add_quantum_modulo(
@@ -331,7 +187,9 @@ class AdderCircuit(QuantumCircuit):
         x_reg: QuantumRegister | list[Qubit],
         y_reg: QuantumRegister | list[Qubit],
         ancilla_bit: Qubit,
+        overflow_bit: Qubit,
         N: int,
+        a_reg: QuantumRegister | list[Qubit] | None = None,
         A: int = 1,
     ) -> None:
         """
@@ -345,15 +203,17 @@ class AdderCircuit(QuantumCircuit):
         m = len(x_bits)
 
         assert m <= n, "x register may hold too large numbers."
-        assert len(y_bits) == n + 1, "The y register must have n+1 qubits."
+        assert len(y_bits) == n, f"The y register must have {n} qubits."
 
         for i in range(m):
             self.c_add_classical_modulo(
                 control_reg=control_bits + [x_bits[i]],
-                N=N,
                 X=((A % N) * 2**i) % N,
                 y_reg=y_bits,
                 ancilla_bit=ancilla_bit,
+                overflow_bit=overflow_bit,
+                N=N,
+                a_reg=a_reg,
             )
 
     def multiply_modulo(
@@ -364,6 +224,7 @@ class AdderCircuit(QuantumCircuit):
         overflow_bit: Qubit,
         ancilla_bit: Qubit,
         N: int,
+        a_reg: QuantumRegister | list[Qubit] | None = None,
         with_uncomputation: bool = True,
         with_swap: bool = True,
     ) -> None:
@@ -371,6 +232,7 @@ class AdderCircuit(QuantumCircuit):
         Performs in-place multiplication x ->  Ax mod N, leveraging out-of-place
         addition on the y_reg qubits, where A is a classical integer.
         The computation requires two more ancillas: the "overflow_bit" and the "ancilla_bit".
+        An optional ancilla register is used to perform additions.
 
         Operation:
             |x>_n |0>_n |0>|0> -> |Ax mod N >_n |0>_n |0>|0>
@@ -393,7 +255,13 @@ class AdderCircuit(QuantumCircuit):
 
         # Out-of-place a-multiplication stage: |x>|0>|0> ->|x>|ax mod N>|0>
         self.add_quantum_modulo(
-            x_reg=x_bits, y_reg=y_bits + [overflow_bit], ancilla_bit=ancilla_bit, N=N, A=A
+            x_reg=x_bits,
+            y_reg=y_bits,
+            ancilla_bit=ancilla_bit,
+            overflow_bit=overflow_bit,
+            N=N,
+            a_reg=a_reg,
+            A=A,
         )
         if with_swap:
             # Swap stage : |x>|ax mod N>|0> -> |ax mod N>|x>|0>
@@ -404,7 +272,9 @@ class AdderCircuit(QuantumCircuit):
             B = pow(A, -1, N)  # AB = 1 mod N
             x = x_bits if with_swap else y_bits
             y = y_bits if with_swap else x_bits
-            self.add_quantum_modulo(x_reg=x, y_reg=y + [overflow_bit], ancilla_bit=ancilla_bit, N=N, A=-B)
+            self.add_quantum_modulo(
+                x_reg=x, y_reg=y, ancilla_bit=ancilla_bit, overflow_bit=overflow_bit, N=N, a_reg=a_reg, A=-B
+            )
 
     def c_multiply_modulo(
         self,
@@ -415,6 +285,7 @@ class AdderCircuit(QuantumCircuit):
         overflow_bit: Qubit,
         ancilla_bit: Qubit,
         N: int,
+        a_reg: QuantumRegister | list[Qubit] | None = None,
         with_uncomputation: bool = True,
         with_swap: bool = True,
     ) -> None:
@@ -427,16 +298,18 @@ class AdderCircuit(QuantumCircuit):
         k = len(control_bits)
         n = math.ceil(math.log2(N))
 
-        assert n == len(x_bits), "The x register must have n qubits."
-        assert n == len(y_bits), "The y register must have n qubits."
+        assert n == len(x_bits), f"The x register must have {n} qubits."
+        assert n == len(y_bits), f"The y register must have {n} qubits."
 
         # Out-of-place a-multiplication stage
         self.c_add_quantum_modulo(
             control_reg=control_bits,
             x_reg=x_bits,
-            y_reg=y_bits + [overflow_bit],
+            y_reg=y_bits,
             ancilla_bit=ancilla_bit,
+            overflow_bit=overflow_bit,
             N=N,
+            a_reg=a_reg,
             A=A,
         )
         if with_swap:
@@ -452,9 +325,11 @@ class AdderCircuit(QuantumCircuit):
             self.c_add_quantum_modulo(
                 control_reg=control_bits,
                 x_reg=x,
-                y_reg=y + [overflow_bit],
+                y_reg=y,
                 ancilla_bit=ancilla_bit,
+                overflow_bit=overflow_bit,
                 N=N,
+                a_reg=a_reg,
                 A=-B,
             )
 
@@ -465,10 +340,12 @@ class AdderCircuit(QuantumCircuit):
         y_reg: QuantumRegister | list[Qubit],
         ancilla_reg: QuantumRegister | list[Qubit],
         N: int,
+        a_reg: QuantumRegister | list[Qubit] | None = None,
     ) -> None:
         """
         Performs modulo N multiplication of y by A^x, using n+2 ancilla qubits,
         where A is a classical integer.
+        An optional ancilla register is used to perform additions.
 
         Operation: |x>_m |y>_n |0>_{n+2} -> |x>_m |(A^x * y) mod N >_n |0>_{n+2}
 
@@ -484,8 +361,8 @@ class AdderCircuit(QuantumCircuit):
         n = math.ceil(math.log2(N))
         m = len(x_bits)
 
-        assert len(y_bits) == n, "The y register must have n qubits."
-        assert len(ancilla_reg) == n + 2, "The ancilla register must have n+2 qubits."
+        assert len(y_bits) == n, f"The y register must have {n} qubits."
+        assert len(ancilla_reg) == n + 2, f"The ancilla register must have {n + 2} qubits."
 
         for i in range(m):
             self.c_multiply_modulo(
@@ -496,4 +373,5 @@ class AdderCircuit(QuantumCircuit):
                 overflow_bit=a_bits[n],
                 ancilla_bit=a_bits[n + 1],
                 N=N,
+                a_reg=a_reg,
             )
